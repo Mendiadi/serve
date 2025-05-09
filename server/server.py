@@ -105,6 +105,64 @@ def is_valid_user():
         return jsonify({"valid": False}), 404
     return jsonify({"uid": uid, "valid": users[uid]["valid"]})
 
+from flask import Flask, request, jsonify
+import json, os, uuid
+
+app = Flask(__name__)
+DATA_FILE = "data.json"
+CODES_FILE = "codes.json"
+ADMIN_PASSWORD = "my_secret_password"
+
+def load_json(file, default): ...
+def save_json(file, data): ...
+users = load_json(DATA_FILE, {})
+redemption_codes = load_json(CODES_FILE, {})
+access_tokens = {}
+
+def generate_token(): return str(uuid.uuid4())
+def save_all(): save_json(DATA_FILE, users); save_json(CODES_FILE, redemption_codes)
+
+@app.route("/register_with_code", methods=["POST"])
+def register_with_code():
+    data = request.get_json()
+    uid = data.get("uid")
+    code = data.get("code")
+    password = data.get("password")
+
+    if not uid or not code or not password:
+        return jsonify({"error": "Missing uid, code or password"}), 400
+
+    if uid in users:
+        return jsonify({"error": "User already exists"}), 400
+
+    if code not in redemption_codes:
+        return jsonify({"error": "Invalid or used code"}), 400
+
+    users[uid] = {
+        "tokens": 0,
+        "valid": True,
+        "password": password  # שמירה בסיסית
+    }
+    del redemption_codes[code]
+
+    token = generate_token()
+    access_tokens[uid] = token
+    save_all()
+    return jsonify({"message": "User registered", "uid": uid, "access_token": token})
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    uid = data.get("uid")
+    password = data.get("password")
+
+    user = users.get(uid)
+    if not user or user.get("password") != password:
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    token = generate_token()
+    access_tokens[uid] = token
+    return jsonify({"message": "Login successful", "uid": uid, "access_token": token})
 
 if __name__ == "__main__":
     app.run(debug=False,host="0.0.0.0",port=int(os.environ.get("PORT",5000)))
