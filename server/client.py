@@ -1,6 +1,6 @@
 import requests
 
-BASE_URL = "https://serve-eqs0.onrender.com/"
+BASE_URL = "https://18.156.158.53:4000/"
 ADMIN_PASSWORD = "my_secret_password"
 TEST_UID = "test_user_1"
 
