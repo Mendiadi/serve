@@ -1,14 +1,14 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify,render_template
 import json
 import os
 import uuid
-
+from flask import send_file
 app = Flask(__name__)
 
 # ---------- הגדרות ----------
 DATA_FILE = "data.json"
 CODES_FILE = "codes.json"
-ADMIN_PASSWORD = "my_secret_password"  # החלף בסיסמה משלך
+ADMIN_PASSWORD = "Ad3110$$"  # החלף בסיסמה משלך
 
 # ---------- ניהול קבצים ----------
 def load_json(file, default):
@@ -32,7 +32,7 @@ def save_all():
     save_json(DATA_FILE, users)
     save_json(CODES_FILE, redemption_codes)
 
-# ---------- API ----------
+# ---------- API ------
 
 @app.route("/generate_code", methods=["POST"])
 def generate_code():
@@ -47,31 +47,6 @@ def generate_code():
     save_json(CODES_FILE, redemption_codes)
     return jsonify({"redemption_code": code})
 
-
-@app.route("/register_with_code", methods=["POST"])
-def register_with_code():
-    data = request.get_json()
-    uid = data.get("uid")
-    code = data.get("code")
-
-    if not uid or not code:
-        return jsonify({"error": "Missing uid or code"}), 400
-
-    if uid in users:
-        return jsonify({"error": "User already exists"}), 400
-
-    if code not in redemption_codes:
-        return jsonify({"error": "Invalid or used code"}), 400
-
-    # צור משתמש חדש
-    users[uid] = {"tokens": 0, "valid": True}
-    del redemption_codes[code]
-
-    token = generate_token()
-    access_tokens[uid] = token
-
-    save_all()
-    return jsonify({"message": "User registered", "uid": uid, "access_token": token})
 
 
 @app.route("/get_tokens", methods=["GET"])
@@ -105,51 +80,41 @@ def is_valid_user():
         return jsonify({"valid": False}), 404
     return jsonify({"uid": uid, "valid": users[uid]["valid"]})
 
-from flask import Flask, request, jsonify
+
 import json, os, uuid
 
-app = Flask(__name__)
-DATA_FILE = "data.json"
-CODES_FILE = "codes.json"
-ADMIN_PASSWORD = "my_secret_password"
+
 
 def load_json(file, default): ...
 def save_json(file, data): ...
 users = load_json(DATA_FILE, {})
-redemption_codes = load_json(CODES_FILE, {})
+redemption_codes = {}
 access_tokens = {}
 
 def generate_token(): return str(uuid.uuid4())
 def save_all(): save_json(DATA_FILE, users); save_json(CODES_FILE, redemption_codes)
 
-@app.route("/register_with_code", methods=["POST"])
-def register_with_code():
+@app.route("/redeem_code_download", methods=["POST"])
+def redeem_code_download():
     data = request.get_json()
     uid = data.get("uid")
     code = data.get("code")
-    password = data.get("password")
 
-    if not uid or not code or not password:
-        return jsonify({"error": "Missing uid, code or password"}), 400
-
-    if uid in users:
-        return jsonify({"error": "User already exists"}), 400
-
+    if not code:
+        return jsonify({"error": "Missing uid or code"}), 400
     if code not in redemption_codes:
-        return jsonify({"error": "Invalid or used code"}), 400
+            return jsonify({"error": "code not correct"}), 400
 
-    users[uid] = {
-        "tokens": 0,
-        "valid": True,
-        "password": password  # שמירה בסיסית
-    }
     del redemption_codes[code]
 
-    token = generate_token()
-    access_tokens[uid] = token
-    save_all()
-    return jsonify({"message": "User registered", "uid": uid, "access_token": token})
+    # נתיב לקובץ שאתה רוצה לשלוח
+    file_path = "LeadMachine_setup_win.exe"
+    if not os.path.exists(file_path):
+        return jsonify({"error": "File not found"}), 500
 
+    # שלח את הקובץ ישירות להורדה
+    return app.redirect("https://mega.nz/file/tQQl2JjQ#2KupMJ2N0oS7lfLEGbj3yEvoHaocuM3mbi2cJlrq5mw")
+    
 @app.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
@@ -163,6 +128,8 @@ def login():
     token = generate_token()
     access_tokens[uid] = token
     return jsonify({"message": "Login successful", "uid": uid, "access_token": token})
-
+@app.route("/")
+def home():
+    return render_template("index.html")
 if __name__ == "__main__":
     app.run(debug=False,host="0.0.0.0",port=int(os.environ.get("PORT",5000)))
