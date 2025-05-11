@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="he">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>מכונת הלידים - הורדה</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+  </head>
+  <body>
+    <!-- ניווט -->
+    <nav class="navbar">
+      <div class="nav-logo">🧑‍💼 מכונת הלידים</div>
+      <div class="hamburger" id="hamburger">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+      </div>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#home">בית</a></li>
+        <li><a href="#about">עלינו</a></li>
+        <li><a href="#contact">צור קשר</a></li>
+      </ul>
+    </nav>
+
+    <!-- כותרת ראשית -->
+    <header id="home">
+      <h1>להורדת המערכת שלנו</h1>
+      <p>הכנס את הקוד שתקבל מהצוות והורד</p>
+      <button id="darkToggle">🌙 מצב כהה</button>
+    </header>
+
+    <section id="about">
+      <h2>עלינו</h2>
+      <p>מתמחים בפתרונות קלים ופשוטים</p>
+    </section>
+        <h2>הכנס פה את הקוד שקיבלת מהמנהלים</h2>
+        <form id="redeemForm">
+          <input
+            type="text"
+            id="redeemCode"
+            placeholder="Enter your code"
+            required
+          />
+          <button type="submit">Submit</button>
+        </form>
+        <div id="message"></div>
+
+      </section>
+   
+      <script>
+  document.getElementById("redeemForm").addEventListener("submit", function(e) {
+  e.preventDefault();
+  const code = document.getElementById("redeemCode").value;
+  const uid = "user123"; // החלף לפי הצורך
+
+  fetch("/redeem_code_download", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid: uid, code: code })
+  })
+  .then(response => {
+    // נבדוק אם יש header שמרמז שזה קובץ להורדה
+    const disposition = response.headers.get('Content-Disposition');
+    if (disposition && disposition.includes('attachment')) {
+      return response.blob().then(blob => ({ blob, filename: getFilenameFromDisposition(disposition) }));
+    } else {
+      // אם זו לא תגובת הורדה – נניח שזה JSON
+      return response.json().then(data => ({ data }));
+    }
+  })
+  .then(result => {
+    const message = document.getElementById("message");
+    if (result.blob) {
+      const url = URL.createObjectURL(result.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename || 'download.exe';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      message.innerHTML = "<p>הקובץ הורד בהצלחה.</p>";
+    } else if (result.data) {
+      if (result.data.download_url) {
+        message.innerHTML = `<p>הקוד אומת. <a href="${result.data.download_url}" download>הורד את הקובץ</a></p>`;
+      } else {
+        message.textContent = result.data.error || "קוד שגוי.";
+      }
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    document.getElementById("message").textContent = "שגיאה בעת ביצוע הבקשה.";
+  });
+
+  function getFilenameFromDisposition(disposition) {
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    return match ? match[1] : null;
+  }
+});
+
+</script>
+
+    </script>
+  </body>
+</html>
