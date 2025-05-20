@@ -1,14 +1,15 @@
-from flask import Flask, request, jsonify,render_template
-import json
+from flask import Flask, request, jsonify, render_template
 import os
+import json
 import uuid
-from flask import send_file
+from datetime import datetime
+
 app = Flask(__name__)
 
 # ---------- הגדרות ----------
-DATA_FILE = "data.json"
 CODES_FILE = "codes.json"
-ADMIN_PASSWORD = "Ad3110$$"  # החלף בסיסמה משלך
+ACCESS_LOG_FILE = "access.log"
+ADMIN_PASSWORD = "Ad3110$$"
 
 # ---------- ניהול קבצים ----------
 def load_json(file, default):
@@ -21,19 +22,36 @@ def save_json(file, data):
     with open(file, "w") as f:
         json.dump(data, f, indent=4)
 
-users = load_json(DATA_FILE, {})
-redemption_codes = load_json(CODES_FILE, {})
-access_tokens = {}  # uid -> token (לא נשמר לקובץ – לשימוש זמני)
+def log_access(ip, code, action, status):
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    with open(ACCESS_LOG_FILE, "a") as f:
+        f.write(f"[{timestamp}] IP: {ip} | Code: {code} | Action: {action} | Status: {status}\n")
 
-def generate_token():
-    return str(uuid.uuid4())
+# ---------- נתונים בזיכרון ----------
+redemption_codes = load_json(CODES_FILE, {})  # dict: code -> True
+code_access_log = {}  # code -> set of IPs
 
-def save_all():
-    save_json(DATA_FILE, users)
-    save_json(CODES_FILE, redemption_codes)
+# ---------- IP ----------
+def get_client_ip():
+    return request.headers.get('X-Forwarded-For', request.remote_addr)
 
-# ---------- API ------
+def track_code_usage(code, action):
+    ip = get_client_ip()
+    if code not in code_access_log:
+        code_access_log[code] = set()
+    code_access_log[code].add(ip)
 
+    if len(code_access_log[code]) > 2:
+        if code in redemption_codes:
+            del redemption_codes[code]
+            save_json(CODES_FILE, redemption_codes)
+        log_access(ip, code, action, "BLOCKED")
+        return False
+
+    log_access(ip, code, action, "OK")
+    return True
+
+# ---------- יצירת קוד ----------
 @app.route("/generate_code", methods=["POST"])
 def generate_code():
     data = request.get_json()
@@ -47,89 +65,47 @@ def generate_code():
     save_json(CODES_FILE, redemption_codes)
     return jsonify({"redemption_code": code})
 
+# ---------- בדיקת קוד ----------
+@app.route("/is_code_valid", methods=["GET"])
+def is_code_valid():
+    code = request.args.get("code")
+    if not code:
+        return jsonify({"error": "Missing code"}), 400
 
-
-@app.route("/get_tokens", methods=["GET"])
-def get_tokens():
-    uid = request.args.get("uid")
-    if uid not in users:
-        return jsonify({"error": "User not found"}), 404
-    return jsonify({"uid": uid, "tokens": users[uid]["tokens"]})
-
-
-@app.route("/update_tokens", methods=["POST"])
-def update_tokens():
-    data = request.get_json()
-    uid = data.get("uid")
-    amount = data.get("amount")
-
-    if uid not in users:
-        return jsonify({"error": "User not found"}), 404
-    if not isinstance(amount, int):
-        return jsonify({"error": "Invalid amount"}), 400
-
-    users[uid]["tokens"] += amount
-    save_json(DATA_FILE, users)
-    return jsonify({"uid": uid, "tokens": users[uid]["tokens"]})
-
-
-@app.route("/is_valid_user", methods=["GET"])
-def is_valid_user():
-    uid = request.args.get("uid")
-    if uid not in users:
+    if code not in redemption_codes:
+        log_access(get_client_ip(), code, "check", "INVALID")
         return jsonify({"valid": False}), 404
-    return jsonify({"uid": uid, "valid": users[uid]["valid"]})
 
+    if not track_code_usage(code, "check"):
+        return jsonify({"error": "Code blocked due to suspicious activity"}), 403
 
-import json, os, uuid
+    return jsonify({"valid": True}), 200
 
-
-
-def load_json(file, default): ...
-def save_json(file, data): ...
-users = load_json(DATA_FILE, {})
-redemption_codes = {}
-access_tokens = {}
-
-def generate_token(): return str(uuid.uuid4())
-def save_all(): save_json(DATA_FILE, users); save_json(CODES_FILE, redemption_codes)
-
-@app.route("/redeem_code_download", methods=["POST"])
-def redeem_code_download():
+# ---------- מימוש קוד ----------
+@app.route("/redeem_code", methods=["POST"])
+def redeem_code():
     data = request.get_json()
-    uid = data.get("uid")
     code = data.get("code")
 
     if not code:
-        return jsonify({"error": "Missing uid or code"}), 400
+        return jsonify({"error": "Missing code"}), 400
     if code not in redemption_codes:
-            return jsonify({"error": "code not correct"}), 400
+        log_access(get_client_ip(), code, "redeem", "INVALID")
+        return jsonify({"error": "Invalid or already used code"}), 400
+
+    if not track_code_usage(code, "redeem"):
+        return jsonify({"error": "Code blocked due to suspicious activity"}), 403
 
     del redemption_codes[code]
+    save_json(CODES_FILE, redemption_codes)
+    log_access(get_client_ip(), code, "redeem", "SUCCESS")
+    return jsonify({"message": "Code redeemed successfully"})
 
-    # נתיב לקובץ שאתה רוצה לשלוח
-    file_path = "LeadMachine_setup_win.exe"
-    if not os.path.exists(file_path):
-        return jsonify({"error": "File not found"}), 500
-
-    # שלח את הקובץ ישירות להורדה
-    return app.redirect("https://mega.nz/file/tQQl2JjQ#2KupMJ2N0oS7lfLEGbj3yEvoHaocuM3mbi2cJlrq5mw")
-    
-@app.route("/login", methods=["POST"])
-def login():
-    data = request.get_json()
-    uid = data.get("uid")
-    password = data.get("password")
-
-    user = users.get(uid)
-    if not user or user.get("password") != password:
-        return jsonify({"error": "Invalid credentials"}), 401
-
-    token = generate_token()
-    access_tokens[uid] = token
-    return jsonify({"message": "Login successful", "uid": uid, "access_token": token})
+# ---------- דף הבית ----------
 @app.route("/")
 def home():
     return render_template("index.html")
+
+# ---------- הרצת השרת ----------
 if __name__ == "__main__":
-    app.run(debug=False,host="0.0.0.0",port=int(os.environ.get("PORT",5000)))
+    app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
