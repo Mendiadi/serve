@@ -6,12 +6,13 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# ---------- הגדרות ----------
+# ---------- קבצים ----------
 CODES_FILE = "codes.json"
+USED_CODES_FILE = "used_codes.json"
 ACCESS_LOG_FILE = "access.log"
 ADMIN_PASSWORD = "Ad3110$$"
 
-# ---------- ניהול קבצים ----------
+# ---------- טוען קבצים ----------
 def load_json(file, default):
     if os.path.exists(file):
         with open(file, "r") as f:
@@ -28,8 +29,9 @@ def log_access(ip, code, action, status):
         f.write(f"[{timestamp}] IP: {ip} | Code: {code} | Action: {action} | Status: {status}\n")
 
 # ---------- נתונים בזיכרון ----------
-redemption_codes = load_json(CODES_FILE, {})  # dict: code -> True
-code_access_log = {}  # code -> set of IPs
+redemption_codes = load_json(CODES_FILE, {})  # קודים פעילים
+used_codes = load_json(USED_CODES_FILE, {})  # קודים שמומשו
+code_access_log = {}  # קוד -> סט של כתובות IP
 
 # ---------- IP ----------
 def get_client_ip():
@@ -42,6 +44,7 @@ def track_code_usage(code, action):
     code_access_log[code].add(ip)
 
     if len(code_access_log[code]) > 2:
+        # חוסם את הקוד בגלל שימוש מחשיד
         if code in redemption_codes:
             del redemption_codes[code]
             save_json(CODES_FILE, redemption_codes)
@@ -72,6 +75,10 @@ def is_code_valid():
     if not code:
         return jsonify({"error": "Missing code"}), 400
 
+    if code in used_codes:
+        log_access(get_client_ip(), code, "check", "USED")
+        return jsonify({"valid": False, "used": True}), 404
+
     if code not in redemption_codes:
         log_access(get_client_ip(), code, "check", "INVALID")
         return jsonify({"valid": False}), 404
@@ -97,9 +104,31 @@ def redeem_code():
         return jsonify({"error": "Code blocked due to suspicious activity"}), 403
 
     del redemption_codes[code]
+    used_codes[code] = True
     save_json(CODES_FILE, redemption_codes)
+    save_json(USED_CODES_FILE, used_codes)
     log_access(get_client_ip(), code, "redeem", "SUCCESS")
     return jsonify({"message": "Code redeemed successfully"})
+
+# ---------- מחיקת קוד מומש (אדמין) ----------
+@app.route("/admin/delete_code", methods=["POST"])
+def admin_delete_code():
+    data = request.get_json()
+    password = data.get("password")
+    code = data.get("code")
+
+    if password != ADMIN_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    if code in redemption_codes:
+        del redemption_codes[code]
+        save_json(CODES_FILE, redemption_codes)
+    if code in used_codes:
+        del used_codes[code]
+        save_json(USED_CODES_FILE, used_codes)
+
+    log_access("ADMIN", code, "delete", "DELETED")
+    return jsonify({"message": "Code deleted"})
 
 # ---------- דף הבית ----------
 @app.route("/")
