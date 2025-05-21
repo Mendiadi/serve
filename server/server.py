@@ -75,18 +75,21 @@ def is_code_valid():
     if not code:
         return jsonify({"error": "Missing code"}), 400
 
+    ip = get_client_ip()
+
     if code in used_codes:
-        log_access(get_client_ip(), code, "check", "USED")
-        return jsonify({"valid": False, "used": True}), 404
+        log_access(ip, code, "check", "USED")
+        return jsonify({"valid": False, "used": True}), 200  # תוקן ל־200
 
     if code not in redemption_codes:
-        log_access(get_client_ip(), code, "check", "INVALID")
-        return jsonify({"valid": False}), 404
+        log_access(ip, code, "check", "INVALID")
+        return jsonify({"valid": False, "used": False}), 404
 
     if not track_code_usage(code, "check"):
         return jsonify({"error": "Code blocked due to suspicious activity"}), 403
 
-    return jsonify({"valid": True}), 200
+    return jsonify({"valid": True, "used": False}), 200
+
 
 # ---------- מימוש קוד ----------
 @app.route("/redeem_code", methods=["POST"])
