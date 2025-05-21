@@ -34,6 +34,8 @@ def log_access(ip, code, action, status):
 redemption_codes = load_json(CODES_FILE, {})  # קודים פעילים
 used_codes = load_json(USED_CODES_FILE, {})  # קודים שמומשו
 code_access_log = {}  # קוד -> סט של כתובות IP
+print(used_codes)
+print(redemption_codes)
 
 # ---------- IP ----------
 def get_client_ip():
