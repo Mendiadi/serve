@@ -11,6 +11,8 @@ CODES_FILE = "codes.json"
 USED_CODES_FILE = "used_codes.json"
 ACCESS_LOG_FILE = "access.log"
 ADMIN_PASSWORD = "Ad3110$$"
+# ---------- קודים חסומים ----------
+blocked_codes = set()
 
 # ---------- טוען קבצים ----------
 def load_json(file, default):
