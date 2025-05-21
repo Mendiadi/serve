@@ -39,15 +39,17 @@ def get_client_ip():
 
 def track_code_usage(code, action):
     ip = get_client_ip()
+    
+    if code in blocked_codes:
+        log_access(ip, code, action, "BLOCKED")
+        return False
+
     if code not in code_access_log:
         code_access_log[code] = set()
     code_access_log[code].add(ip)
 
     if len(code_access_log[code]) > 2:
-        # חוסם את הקוד בגלל שימוש מחשיד
-        if code in redemption_codes:
-            del redemption_codes[code]
-            save_json(CODES_FILE, redemption_codes)
+        blocked_codes.add(code)
         log_access(ip, code, action, "BLOCKED")
         return False
 
@@ -72,6 +74,10 @@ def generate_code():
 @app.route("/is_code_valid", methods=["GET"])
 def is_code_valid():
     code = request.args.get("code")
+    if code in blocked_codes:
+        log_access(get_client_ip(), code, "check", "BLOCKED")
+        return jsonify({"valid": False, "blocked": True}), 403
+
     if not code:
         return jsonify({"error": "Missing code"}), 400
 
