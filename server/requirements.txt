@@ -1,4 +1,4 @@
 flask
 requests
-pymongo 
+pymongo[srv]==3.12 
 dnspython
