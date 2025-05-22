@@ -40,6 +40,8 @@ def delete_used_code(code):
 try:
     redemption_codes = load_redemption_codes()
     used_codes = load_used_codes()
+    print(used_codes)
+    print(redemption_codes)
 except Exception as e:
     raise e
 
@@ -70,11 +72,9 @@ def log_access(ip, code, action, status):
         f.write(f"[{timestamp}] IP: {ip} | Code: {code} | Action: {action} | Status: {status}\n")
 
 # ---------- נתונים בזיכרון ----------
-redemption_codes = load_json(CODES_FILE, {})  # קודים פעילים
-used_codes = load_json(USED_CODES_FILE, {})  # קודים שמומשו
+
 code_access_log = {}  # קוד -> סט של כתובות IP
-print(used_codes)
-print(redemption_codes)
+
 
 # ---------- IP ----------
 def get_client_ip():
