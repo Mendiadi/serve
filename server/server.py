@@ -30,8 +30,14 @@ def save_used_code(code):
 
 def delete_used_code(code):
     used_collection.delete_one({"code": code})
-redemption_codes = load_redemption_codes()
-used_codes = load_used_codes()
+try:
+    redemption_codes = load_redemption_codes()
+    used_codes = load_used_codes()
+except Exception as e:
+    print(f"❌ Failed to load codes from MongoDB: {e}")
+    redemption_codes = {}
+    used_codes = {}
+
 
 
 # ---------- קבצים ----------
