@@ -41,9 +41,7 @@ try:
     redemption_codes = load_redemption_codes()
     used_codes = load_used_codes()
 except Exception as e:
-    print(f"❌ Failed to load codes from MongoDB: {e}")
-    redemption_codes = {}
-    used_codes = {}
+    raise e
 
 
 
