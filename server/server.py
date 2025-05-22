@@ -3,8 +3,36 @@ import os
 import json
 import uuid
 from datetime import datetime
+from pymongo import MongoClient
+
+# MongoDB Connection
+MONGO_URI = "mongodb+srv://itsshokobo:btNjtK4xgwnGSeNf@cluster0.gsohlmo.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+client = MongoClient(MONGO_URI)
+db = client['flask_codes_db']
+redemption_collection = db['redemption_codes']
+used_collection = db['used_codes']
 
 app = Flask(__name__)
+def load_redemption_codes():
+    return {doc["code"]: True for doc in redemption_collection.find()}
+
+def load_used_codes():
+    return {doc["code"]: True for doc in used_collection.find()}
+
+def save_redemption_code(code):
+    redemption_collection.insert_one({"code": code})
+
+def delete_redemption_code(code):
+    redemption_collection.delete_one({"code": code})
+
+def save_used_code(code):
+    used_collection.insert_one({"code": code})
+
+def delete_used_code(code):
+    used_collection.delete_one({"code": code})
+redemption_codes = load_redemption_codes()
+used_codes = load_used_codes()
+
 
 # ---------- קבצים ----------
 CODES_FILE = "codes.json"
@@ -71,8 +99,9 @@ def generate_code():
 
     code = str(uuid.uuid4())
     redemption_codes[code] = True
-    save_json(CODES_FILE, redemption_codes)
+    save_redemption_code(code)
     return jsonify({"redemption_code": code})
+
 
 # ---------- בדיקת קוד ----------
 @app.route("/is_code_valid", methods=["GET"])
@@ -118,10 +147,11 @@ def redeem_code():
 
     del redemption_codes[code]
     used_codes[code] = True
-    save_json(CODES_FILE, redemption_codes)
-    save_json(USED_CODES_FILE, used_codes)
+    delete_redemption_code(code)
+    save_used_code(code)
     log_access(get_client_ip(), code, "redeem", "SUCCESS")
     return jsonify({"message": "Code redeemed successfully"})
+
 
 # ---------- מחיקת קוד מומש (אדמין) ----------
 @app.route("/admin/delete_code", methods=["POST"])
@@ -135,13 +165,14 @@ def admin_delete_code():
 
     if code in redemption_codes:
         del redemption_codes[code]
-        save_json(CODES_FILE, redemption_codes)
+        delete_redemption_code(code)
     if code in used_codes:
         del used_codes[code]
-        save_json(USED_CODES_FILE, used_codes)
+        delete_used_code(code)
 
     log_access("ADMIN", code, "delete", "DELETED")
     return jsonify({"message": "Code deleted"})
+
 
 # ---------- דף הבית ----------
 @app.route("/")
